@@ -31,39 +31,49 @@ winampGeneralPurposePlugin plugin = {
 };
 WNDPROC oldWndProc;
 BOOL fUnicode;
-char* LOG_DIR = "C:\\logs\\";
-char* LOG_FILENAME = "C:\\logs\\log.txt";
+
+const wchar_t* INI_KEY = L"SONG_LOGGER";
+const wchar_t* LOGFILE_BASE_PATH_KEY = L"logfile_basepath";
+const wchar_t* DEFAULT_BASE_PATH = L"c:\\logs\\";
+wchar_t ini_path[MAX_PATH] = {0};
+void GetIniFilePath(HWND hwnd);
+
 Logger logger;
 
 // event functions follow
 
 int init() {
 	fUnicode = IsWindowUnicode(plugin.hwndParent);
+
+	if(!fUnicode) {
+		MessageBoxA(plugin.hwndParent, "Not Unicode !! May be problematic", "", MB_OK);
+	}
+
 	oldWndProc = (WNDPROC) ((fUnicode) ? SetWindowLongPtrW(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)SubclassProc) : 
 		SetWindowLongPtrA(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)SubclassProc));
 
-	logger.open();
+	wchar_t basePath[MAX_PATH];
+	GetIniFilePath(plugin.hwndParent);
+	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
+
+	logger.open(basePath);
 	return 0;
 
 }
 
 void config() {
 
-	//A basic messagebox that tells you the 'config' event has been triggered.
-	//You can change this later to do whatever you want (including nothing)
-	MessageBox(plugin.hwndParent, L"Config event triggered for gen_myplugin.", L"", MB_OK);
+	wchar_t basePath[MAX_PATH];
+	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
 
-	int version = SendMessage(plugin.hwndParent,WM_WA_IPC,0,IPC_GETVERSION); 
-	int majVersion = WINAMP_VERSION_MAJOR(version); 
-	int minVersion = WINAMP_VERSION_MINOR(version);
-	wchar_t msg[1024]; 
-	wsprintf(msg,L"The version of Winamp is: %x\n Major version: %x\nMinor version: %x\n",
-		version,
-		majVersion,
-		minVersion
-		);
+	// TODO config window / input dialog
+	MessageBox(plugin.hwndParent, basePath, L"Saving to ini", MB_OK);
+	
+	int r = WritePrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, basePath, ini_path );
 
-	MessageBox(plugin.hwndParent,msg,L"Winamp Version",MB_OK); 
+	if (r == 0) {
+		int code = GetLastError();
+	}
 
 }
 
@@ -147,3 +157,18 @@ extern "C" __declspec(dllexport) winampGeneralPurposePlugin* winampGetGeneralPur
 
 } 
 
+void GetIniFilePath(HWND hwnd){
+	if(SendMessage(hwnd,WM_WA_IPC,0,IPC_GETVERSION) >= 0x2900){
+		// this gets the string of the full ini file path
+		char *ini_pathA = (char*) SendMessage(hwnd, WM_WA_IPC, 0, IPC_GETINIFILE);
+		const size_t cSize = strlen(ini_pathA)+1;
+		mbstowcs(ini_path, ini_pathA, cSize);
+	}
+	else{
+		// TODO throw error not supporting lower versions
+		//wchar_t* p = ini_path;
+		//p += GetModuleFileName(0,ini_path,sizeof(ini_path)) - 1;
+		//while(p && *p != '.'){p--;}
+		//lstrcpyn(p+1,L"ini",sizeof(ini_path));
+	}
+}
