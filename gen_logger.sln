@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gen_logger", "gen_logger\gen_logger.vcxproj", "{978F5703-F72E-4876-A2D5-ED6C86A489BF}"
+# Visual C++ Express 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gen_logger", "gen_logger\gen_logger.vcxproj", "{7A5536F8-B7D7-46CB-9EC7-F8EE8B9F1EBD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -9,10 +9,10 @@ Global
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{978F5703-F72E-4876-A2D5-ED6C86A489BF}.Debug|Win32.ActiveCfg = Debug|Win32
-		{978F5703-F72E-4876-A2D5-ED6C86A489BF}.Debug|Win32.Build.0 = Debug|Win32
-		{978F5703-F72E-4876-A2D5-ED6C86A489BF}.Release|Win32.ActiveCfg = Release|Win32
-		{978F5703-F72E-4876-A2D5-ED6C86A489BF}.Release|Win32.Build.0 = Release|Win32
+		{7A5536F8-B7D7-46CB-9EC7-F8EE8B9F1EBD}.Debug|Win32.ActiveCfg = Debug|Win32
+		{7A5536F8-B7D7-46CB-9EC7-F8EE8B9F1EBD}.Debug|Win32.Build.0 = Debug|Win32
+		{7A5536F8-B7D7-46CB-9EC7-F8EE8B9F1EBD}.Release|Win32.ActiveCfg = Release|Win32
+		{7A5536F8-B7D7-46CB-9EC7-F8EE8B9F1EBD}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

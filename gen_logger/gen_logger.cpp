@@ -1,11 +1,8 @@
 //Based on Winamp generic plugin template code.
 #include "stdafx.h"
-#include <ctime>
-#include <windows.h>
 #include "gen_logger.h"
 #include "wa_ipc.h"
 #include <string>
-#include <stdio.h>
 #include <fstream>
 #include "logger.h"
 
@@ -35,6 +32,8 @@ BOOL fUnicode;
 const wchar_t* INI_KEY = L"SONG_LOGGER";
 const wchar_t* LOGFILE_BASE_PATH_KEY = L"logfile_basepath";
 const wchar_t* DEFAULT_BASE_PATH = L"c:\\logs\\";
+const wchar_t* CURRFILENAME_KEY = L"current_file";
+const wchar_t* ROTATE_FREQ_KEY = L"rotate_freq";
 wchar_t ini_path[MAX_PATH] = {0};
 void GetIniFilePath(HWND hwnd);
 
@@ -52,11 +51,21 @@ int init() {
 	oldWndProc = (WNDPROC) ((fUnicode) ? SetWindowLongPtrW(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)SubclassProc) : 
 		SetWindowLongPtrA(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)SubclassProc));
 
-	wchar_t basePath[MAX_PATH];
 	GetIniFilePath(plugin.hwndParent);
-	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
 
-	logger.open(basePath);
+	wchar_t basePath[MAX_PATH];
+	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
+	
+	wchar_t currentFilename[Logger::MAX_FILENAME_LEN];
+	GetPrivateProfileString( INI_KEY, CURRFILENAME_KEY, L"NULL", currentFilename, Logger::MAX_FILENAME_LEN, ini_path );
+
+	wchar_t rotFreqStr[2];
+	wchar_t defBuffer[2];
+	swprintf(defBuffer, 2, L"%d", static_cast<int>(DAILY));
+	GetPrivateProfileString( INI_KEY, ROTATE_FREQ_KEY, defBuffer, rotFreqStr, 2, ini_path );
+	RotateFreq rotFreq = static_cast<RotateFreq> (stoi(rotFreqStr));
+
+	logger.open(basePath, currentFilename, rotFreq);
 	return 0;
 
 }
@@ -75,6 +84,13 @@ void config() {
 		int code = GetLastError();
 	}
 
+	wchar_t defBuffer[2];
+	swprintf(defBuffer, 2, L"%d", static_cast<int>(DAILY));
+	r = WritePrivateProfileString( INI_KEY, ROTATE_FREQ_KEY, defBuffer, ini_path );
+
+	if (r == 0) {
+		int code = GetLastError();
+	}
 }
 
 void quit() {
@@ -82,7 +98,9 @@ void quit() {
 	if(fUnicode) SetWindowLongPtrW(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)oldWndProc);
 	else SetWindowLongPtrA(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)oldWndProc);
 
-	logger.close();
+	wstring currFilename = logger.close();
+
+	WritePrivateProfileString( INI_KEY, CURRFILENAME_KEY, currFilename.c_str(), ini_path );
 }
 
 const int META_ITEMS = 4;
@@ -141,7 +159,7 @@ static LRESULT WINAPI SubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 			//Sleep(10000);
 			logger.log(json);
 
-			MessageBox(plugin.hwndParent,json.data(),L"meta",MB_OK);
+			//MessageBox(plugin.hwndParent,json.data(),L"meta",MB_OK);
 		}
 	}
 

@@ -7,9 +7,8 @@
 using namespace std;
 
 //char* LOG_DIR = "C:\\logs\\";
-const wstring Logger::LOG_FILENAME = L"log.txt";
+//const wstring Logger::LOG_FILENAME = L"log.txt";
 const wstring Logger::ARCHIVE_FOLDER = L"archive\\";
-const wstring Logger::ARCHIVE_FILE_PATTERN = ARCHIVE_FOLDER + L"%04d%02d%02d.txt";
 
 Logger::Logger() {
 
@@ -19,11 +18,14 @@ Logger::~Logger(void) {
 	close();
 }
 
-void Logger::open(wstring basePath) {
+void Logger::open(wstring basePath, wstring currentFilename, RotateFreq freq) {
 	logfileBasePath = basePath;
-	logfilename = basePath + LOG_FILENAME;
-	if (!RotateIfNecessary())
-		stream.open(logfilename.c_str(), std::ofstream::out | std::ofstream::app);
+	currLogFilename = currentFilename;
+	rotateFreqency = freq;
+
+	if (!RotateIfNecessary()) {
+		stream.open((basePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
+	}
 }
 
 void Logger::log(std::wstring entry) {
@@ -31,44 +33,58 @@ void Logger::log(std::wstring entry) {
 	stream << entry << std::endl;
 }
 
-void Logger::close() {
+wstring Logger::close() {
 	RotateIfNecessary();
 	if (stream.is_open())
 		stream.close();
+	return currLogFilename;
 }
 
-bool Logger::IsTimeToRotate(SYSTEMTIME* logfileCreated) {
-	SYSTEMTIME systemtime; 
-	WIN32_FILE_ATTRIBUTE_DATA attributes;
-	int result = GetFileAttributesEx(logfilename.c_str(), GetFileExInfoStandard, &attributes);
-	//TODO exception handling
-	if (result == 0 ) {
-		int code = GetLastError();
-	}
-	FileTimeToSystemTime(&attributes.ftCreationTime, logfileCreated);
+bool Logger::IsTimeToRotate(wstring& calcFilename) {
+	wchar_t buffer[24];
+	calcFilename = CalcLogFilename(buffer);
 
-	GetSystemTime(&systemtime);
-	//return false;
-	return !(systemtime.wYear == logfileCreated->wYear && systemtime.wMonth == logfileCreated->wMonth && systemtime.wDay == logfileCreated->wDay);
+	return calcFilename.compare(currLogFilename) != 0; 
 }
 
 bool Logger::RotateIfNecessary() {
-	SYSTEMTIME logfileCreated;
-	if (IsTimeToRotate(&logfileCreated)) {
+	wstring newLogFilename;
+	wstring& newLogFileref = newLogFilename;
+	if (IsTimeToRotate(newLogFileref)) {
 		if (stream.is_open())
 			stream.close();
-		wchar_t buffer[1024];
-		swprintf(buffer, 1024, (logfileBasePath + ARCHIVE_FILE_PATTERN).c_str(), logfileCreated.wYear, logfileCreated.wMonth, logfileCreated.wDay);
 
-		int r = MoveFile(logfilename.c_str(), buffer); 
+		int r = MoveFile((logfileBasePath + currLogFilename).c_str(), (logfileBasePath + ARCHIVE_FOLDER + currLogFilename).c_str()); 
 
 		//TODO exception handling
 		if (r == 0) {
 			int code = GetLastError();
+			r++;
 		}
 
-		stream.open(logfilename.c_str(), std::ofstream::out | std::ofstream::app);
+		currLogFilename = newLogFilename;
+		stream.open((logfileBasePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
 		return true;
 	}
 	return false;
+}
+
+wchar_t* Logger::CalcLogFilename(wchar_t* buffer) {
+	SYSTEMTIME localtime; 
+	GetLocalTime(&localtime);
+	switch (rotateFreqency) {
+	case EVERY_MINUTE:
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d%02d%02d.txt", localtime.wYear, localtime.wMonth, localtime.wDay, localtime.wHour, localtime.wMinute);
+		break;
+	case HOURLY:
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d%02d.txt", localtime.wYear, localtime.wMonth, localtime.wDay, localtime.wHour);
+		break;
+	case DAILY:
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d.txt", localtime.wYear, localtime.wMonth, localtime.wDay);
+		break;
+	case MONTHLY:
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d.txt", localtime.wYear, localtime.wMonth);
+		break;
+	}
+	return buffer;
 }
