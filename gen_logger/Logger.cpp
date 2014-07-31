@@ -4,8 +4,12 @@
 #include <fstream>
 #include "wa_ipc.h"
 #include <Windows.h>
+#include <locale>
+#include <codecvt>
 using namespace std;
 
+const std::locale utf8_locale = std::locale(std::locale(),
+                                    new std::codecvt_utf8<wchar_t>());
 //char* LOG_DIR = "C:\\logs\\";
 //const wstring Logger::LOG_FILENAME = L"log.txt";
 const wstring Logger::ARCHIVE_FOLDER = L"archive\\";
@@ -25,6 +29,7 @@ void Logger::open(wstring basePath, wstring currentFilename, RotateFreq freq) {
 
 	if (!RotateIfNecessary()) {
 		stream.open((basePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
+		stream.imbue(utf8_locale);
 	}
 }
 
@@ -64,6 +69,7 @@ bool Logger::RotateIfNecessary() {
 
 		currLogFilename = newLogFilename;
 		stream.open((logfileBasePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
+		stream.imbue(utf8_locale);
 		return true;
 	}
 	return false;
