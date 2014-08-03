@@ -103,9 +103,9 @@ void quit() {
 	WritePrivateProfileString( INI_KEY, CURRFILENAME_KEY, currFilename.c_str(), ini_path );
 }
 
-const int META_ITEMS = 4;
-const wchar_t* META_DATA_NAMES_ARRAY[META_ITEMS] = { L"artist", L"title", L"album", L"albumartist"}; 
-const int BUFFER_SIZE = 512;
+const wchar_t* META_DATA_NAMES_ARRAY[] = { L"artist", L"title", L"album", L"albumartist", L"composer", L"lyricist"}; 
+const int META_ITEMS = sizeof(META_DATA_NAMES_ARRAY) / sizeof(wchar_t*);
+const int BUFFER_SIZE = 1024;
 
 wchar_t* GetMetaData(const wchar_t* filename, const wchar_t* metaname, wchar_t* buffer) {
 	extendedFileInfoStructW efs;
@@ -118,13 +118,35 @@ wchar_t* GetMetaData(const wchar_t* filename, const wchar_t* metaname, wchar_t* 
 	return buffer;
 }
 
-void WriteToLog(wchar_t* log);
+wchar_t* escape(wchar_t* in, wchar_t* buffer) {
+	int j = 0;
+	for ( int i = 0; in[i] != 0; i++ ){
+		switch ( in[i] ) { 
+		case L'\b':
+		case L'\f':
+		case L'\n':
+		case L'\r':
+		case L'\t': buffer[j++] = L' '; break;
+
+		case L'\"': 
+		case L'\\': buffer[j++] = L'\\';
+			buffer[j++] = in[i];
+			break;
+		default : buffer[j++] = in[i];
+		}
+	}
+	buffer[j] = 0;
+	return buffer;
+}
 
 std::wstring StartJSONWithTimeAndFileName(std::wstring& json, wchar_t* filename) {
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	wchar_t buffer[1024];
-	swprintf(buffer, 1024, L"{\"time\":%04d%02d%02d%02d%02d%02d, \"filename\":\"%s\"", time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, filename);
+	wchar_t filenameBuffer[MAX_PATH * 2];
+	swprintf(buffer, 1024, L"{\"time\":%04d%02d%02d%02d%02d%02d, \"filename\":\"%s\"", 
+		time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, 
+		escape(filename,filenameBuffer));
 
 	json.append(buffer);
 	return json;
@@ -134,8 +156,9 @@ std::wstring AppendToJSON(wchar_t* metadata, int i, std::wstring& buffer){
 	buffer.append(L", \"");
 	buffer.append(META_DATA_NAMES_ARRAY[i]);
 	buffer.append(L"\":\"");
-	//TODO escape ' " backslash
-	buffer.append(metadata);
+
+	wchar_t b[2 * BUFFER_SIZE];
+	buffer.append(escape(metadata, b));
 	buffer.append(L"\"");
 
 	return buffer;
@@ -155,7 +178,7 @@ static LRESULT WINAPI SubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 				GetMetaData(filename, META_DATA_NAMES_ARRAY[i], buffer);
 				AppendToJSON(buffer, i, json);
 			}
-			json.append(L"}");
+			json.append(L"},");
 			//Sleep(10000);
 			logger.log(json);
 
