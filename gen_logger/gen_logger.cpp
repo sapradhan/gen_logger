@@ -4,7 +4,11 @@
 #include "wa_ipc.h"
 #include <string>
 #include <fstream>
+#include <ShlObj.h>
+#include<tchar.h>
 #include "logger.h"
+#include "resource.h"
+
 
 // these are callback functions/events which will be called by Winamp
 int  init(void);
@@ -12,6 +16,9 @@ void config(void);
 void quit(void);
 
 static LRESULT WINAPI SubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+BOOL CALLBACK ConfigDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+bool ExecuteConfigModalDialog(HWND hParent);
 
 // this structure contains plugin information, version, name... 
 // GPPHDR_VER is the version of the winampGeneralPurposePlugin (GPP) structure 
@@ -55,7 +62,7 @@ int init() {
 
 	wchar_t basePath[MAX_PATH];
 	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
-	
+
 	wchar_t currentFilename[Logger::MAX_FILENAME_LEN];
 	GetPrivateProfileString( INI_KEY, CURRFILENAME_KEY, L"NULL", currentFilename, Logger::MAX_FILENAME_LEN, ini_path );
 
@@ -71,13 +78,25 @@ int init() {
 }
 
 void config() {
+	HWND hParent= (HWND)SendMessage(plugin.hwndParent,WM_WA_IPC,0,IPC_GETPREFSWND);
+	if(!IsWindow(hParent))
+	{
+		hParent=(HWND)SendMessage(plugin.hwndParent,WM_WA_IPC,0,IPC_GETDIALOGBOXPARENT);
+		if(!IsWindow(hParent))
+		{
+			hParent=plugin.hwndParent;
+		}
+	}
+	ExecuteConfigModalDialog (hParent);
+
+	return;
 
 	wchar_t basePath[MAX_PATH];
 	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
 
 	// TODO config window / input dialog
 	MessageBox(plugin.hwndParent, basePath, L"Saving to ini", MB_OK);
-	
+
 	int r = WritePrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, basePath, ini_path );
 
 	if (r == 0) {
@@ -101,6 +120,16 @@ void quit() {
 	wstring currFilename = logger.close();
 
 	WritePrivateProfileString( INI_KEY, CURRFILENAME_KEY, currFilename.c_str(), ini_path );
+}
+
+bool ExecuteConfigModalDialog(HWND hParent) {
+	int res= DialogBox(
+		plugin.hDllInstance,
+		MAKEINTRESOURCE(IDD_CONFIG_DIALOG),
+		hParent,
+		ConfigDlgProc
+		);
+	return (res >= 1);
 }
 
 const wchar_t* META_DATA_NAMES_ARRAY[] = { L"artist", L"title", L"album", L"albumartist", L"composer", L"lyricist"}; 
@@ -189,6 +218,83 @@ static LRESULT WINAPI SubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 	return (fUnicode) ? CallWindowProcW(oldWndProc, hwnd, msg, wParam, lParam) : CallWindowProcA(oldWndProc, hwnd, msg, wParam, lParam);
 }
 
+BOOL CALLBACK ConfigDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	//ShowWindow(hWnd,SW_SHOW);
+
+	switch(uMsg) {
+	case WM_INITDIALOG:
+		//hdir2=GetDlgItem(hWnd,IDC_DIR_2);
+		SetDlgItemText(hWnd, EDIT_LOG_FOLDER, L"c:\\Test");
+		//SetDlgItemInt(hWnd, R_MONTHLY, 1, TRUE);
+		CheckRadioButton(hWnd, R_MONTHLY, R_HOURLY, R_DAILY);
+
+		break;
+	case WM_COMMAND:
+		switch(HIWORD(wParam)) {
+		case BN_CLICKED:
+			switch(LOWORD(wParam)) {
+			case IDOK:
+				wchar_t basePathBuffer[MAX_PATH];
+				RotateFreq freq;
+				GetDlgItemText(hWnd, EDIT_LOG_FOLDER, basePathBuffer, MAX_PATH);
+				if (IsDlgButtonChecked(hWnd, R_MONTHLY) == BST_CHECKED) { 
+					freq = MONTHLY;
+				} else if (IsDlgButtonChecked(hWnd, R_DAILY) == BST_CHECKED) {
+					freq = DAILY;
+				} else if (IsDlgButtonChecked(hWnd, R_HOURLY) == BST_CHECKED) {
+					freq = HOURLY;
+				}
+				//freq = (IsDlgButtonChecked(hWnd, R_MONTHLY) == BST_CHECKED) ? MONTHLY :
+				//((IsDlgButtonChecked(hWnd, R_DAILY) == BST_CHECKED) ? DAILY : 
+				//	((IsDlgButtonChecked(hWnd, R_HOURLY) == BST_CHECKED) ? HOURLY : DAILY)
+				//	);
+
+				wchar_t buffer[1024];
+				swprintf(buffer, 1024, L"%s %d", basePathBuffer, freq);
+
+				MessageBox(plugin.hwndParent,buffer,L"meta",MB_OK);
+				EndDialog(hWnd, 1);
+				return TRUE;
+			case IDCANCEL: 
+				EndDialog(hWnd, 0);
+				break;
+			case LOG_FOLDER_BROWSE:
+				CoInitialize(NULL);
+				BROWSEINFO bInfo;
+				ZeroMemory(&bInfo, sizeof(BROWSEINFO));
+				bInfo.hwndOwner = hWnd;
+				bInfo.pidlRoot = NULL;
+				bInfo.ulFlags = BIF_USENEWUI;
+				bInfo.lpfn = NULL;
+				bInfo.lParam = NULL;
+				bInfo.lpszTitle = _T("Pick a Directory");
+				LPITEMIDLIST pidl;
+				pidl = SHBrowseForFolder ( &bInfo );
+				if ( pidl != 0 ) {
+					// get the name of the folder
+					TCHAR path[MAX_PATH];
+					if ( SHGetPathFromIDList ( pidl, path ) ) {
+						_tprintf ( _T("Selected Folder: %s\n"), path );
+					}
+
+					// free memory used
+					IMalloc * imalloc = 0;
+					if ( SUCCEEDED( SHGetMalloc ( &imalloc )) ) {
+						imalloc->Free ( pidl );
+						imalloc->Release ( );
+					}
+				}
+				CoUninitialize();
+				break;
+			}}
+		break;
+	case WM_CLOSE:
+		EndDialog(hWnd, 0);
+		break;
+	}
+	return FALSE;
+}
+
 
 // This is an export function called by winamp which returns this plugin info. 
 // We wrap the code in 'extern "C"' to ensure the export isn't mangled if used in a CPP file. 
@@ -199,13 +305,12 @@ extern "C" __declspec(dllexport) winampGeneralPurposePlugin* winampGetGeneralPur
 } 
 
 void GetIniFilePath(HWND hwnd){
-	if(SendMessage(hwnd,WM_WA_IPC,0,IPC_GETVERSION) >= 0x2900){
+	if(SendMessage(hwnd,WM_WA_IPC,0,IPC_GETVERSION) >= 0x2900) {
 		// this gets the string of the full ini file path
 		char *ini_pathA = (char*) SendMessage(hwnd, WM_WA_IPC, 0, IPC_GETINIFILE);
 		const size_t cSize = strlen(ini_pathA)+1;
 		mbstowcs(ini_path, ini_pathA, cSize);
-	}
-	else{
+	} else {
 		// TODO throw error not supporting lower versions
 		//wchar_t* p = ini_path;
 		//p += GetModuleFileName(0,ini_path,sizeof(ini_path)) - 1;
