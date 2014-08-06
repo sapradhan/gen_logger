@@ -5,7 +5,7 @@
 #include <string>
 #include <fstream>
 #include <ShlObj.h>
-#include<tchar.h>
+#include <tchar.h>
 #include "logger.h"
 #include "resource.h"
 
@@ -38,11 +38,27 @@ BOOL fUnicode;
 
 const wchar_t* INI_KEY = L"SONG_LOGGER";
 const wchar_t* LOGFILE_BASE_PATH_KEY = L"logfile_basepath";
-const wchar_t* DEFAULT_BASE_PATH = L"c:\\logs\\";
 const wchar_t* CURRFILENAME_KEY = L"current_file";
 const wchar_t* ROTATE_FREQ_KEY = L"rotate_freq";
+
+//defaults
+const wchar_t* DEFAULT_BASE_PATH = L"c:\\logs\\";
+const RotateFreq DEFAULT_ROTATE_FREQ = DAILY;
+
+
+//config
+RotateFreq rotFreq;
+wchar_t basePath[MAX_PATH];
+
+wchar_t currentFilename[Logger::MAX_FILENAME_LEN];
 wchar_t ini_path[MAX_PATH] = {0};
 void GetIniFilePath(HWND hwnd);
+void UpdateSettings(wchar_t* newBasePath, RotateFreq newFreq);
+void ReadConfig();
+void WriteConfig(wchar_t* basePath, RotateFreq freq);
+
+RotateFreq RadioButtonToEnum( HWND hWnd );
+int EnumToRadioButton( RotateFreq freq );
 
 Logger logger;
 
@@ -58,19 +74,7 @@ int init() {
 	oldWndProc = (WNDPROC) ((fUnicode) ? SetWindowLongPtrW(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)SubclassProc) : 
 		SetWindowLongPtrA(plugin.hwndParent, GWLP_WNDPROC, (LONG_PTR)SubclassProc));
 
-	GetIniFilePath(plugin.hwndParent);
-
-	wchar_t basePath[MAX_PATH];
-	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
-
-	wchar_t currentFilename[Logger::MAX_FILENAME_LEN];
-	GetPrivateProfileString( INI_KEY, CURRFILENAME_KEY, L"NULL", currentFilename, Logger::MAX_FILENAME_LEN, ini_path );
-
-	wchar_t rotFreqStr[2];
-	wchar_t defBuffer[2];
-	swprintf(defBuffer, 2, L"%d", static_cast<int>(DAILY));
-	GetPrivateProfileString( INI_KEY, ROTATE_FREQ_KEY, defBuffer, rotFreqStr, 2, ini_path );
-	RotateFreq rotFreq = static_cast<RotateFreq> (stoi(rotFreqStr));
+	ReadConfig();
 
 	logger.open(basePath, currentFilename, rotFreq);
 	return 0;
@@ -78,38 +82,16 @@ int init() {
 }
 
 void config() {
-	HWND hParent= (HWND)SendMessage(plugin.hwndParent,WM_WA_IPC,0,IPC_GETPREFSWND);
-	if(!IsWindow(hParent))
-	{
-		hParent=(HWND)SendMessage(plugin.hwndParent,WM_WA_IPC,0,IPC_GETDIALOGBOXPARENT);
-		if(!IsWindow(hParent))
-		{
+	HWND hParent = (HWND) SendMessage(plugin.hwndParent, WM_WA_IPC, 0, IPC_GETPREFSWND);
+	if(!IsWindow(hParent)) {
+		hParent = (HWND) SendMessage(plugin.hwndParent, WM_WA_IPC, 0, IPC_GETDIALOGBOXPARENT);
+		if(!IsWindow(hParent)) {
 			hParent=plugin.hwndParent;
 		}
 	}
 	ExecuteConfigModalDialog (hParent);
 
 	return;
-
-	wchar_t basePath[MAX_PATH];
-	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
-
-	// TODO config window / input dialog
-	MessageBox(plugin.hwndParent, basePath, L"Saving to ini", MB_OK);
-
-	int r = WritePrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, basePath, ini_path );
-
-	if (r == 0) {
-		int code = GetLastError();
-	}
-
-	wchar_t defBuffer[2];
-	swprintf(defBuffer, 2, L"%d", static_cast<int>(DAILY));
-	r = WritePrivateProfileString( INI_KEY, ROTATE_FREQ_KEY, defBuffer, ini_path );
-
-	if (r == 0) {
-		int code = GetLastError();
-	}
 }
 
 void quit() {
@@ -219,16 +201,13 @@ static LRESULT WINAPI SubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 }
 
 BOOL CALLBACK ConfigDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	//ShowWindow(hWnd,SW_SHOW);
-
 	switch(uMsg) {
-	case WM_INITDIALOG:
-		//hdir2=GetDlgItem(hWnd,IDC_DIR_2);
-		SetDlgItemText(hWnd, EDIT_LOG_FOLDER, L"c:\\Test");
-		//SetDlgItemInt(hWnd, R_MONTHLY, 1, TRUE);
-		CheckRadioButton(hWnd, R_MONTHLY, R_HOURLY, R_DAILY);
 
+	case WM_INITDIALOG:
+		SetDlgItemText(hWnd, EDIT_LOG_FOLDER, basePath);
+		CheckRadioButton(hWnd, R_MONTHLY, R_HOURLY, EnumToRadioButton(rotFreq));
 		break;
+
 	case WM_COMMAND:
 		switch(HIWORD(wParam)) {
 		case BN_CLICKED:
@@ -237,34 +216,30 @@ BOOL CALLBACK ConfigDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				wchar_t basePathBuffer[MAX_PATH];
 				RotateFreq freq;
 				GetDlgItemText(hWnd, EDIT_LOG_FOLDER, basePathBuffer, MAX_PATH);
-				if (IsDlgButtonChecked(hWnd, R_MONTHLY) == BST_CHECKED) { 
-					freq = MONTHLY;
-				} else if (IsDlgButtonChecked(hWnd, R_DAILY) == BST_CHECKED) {
-					freq = DAILY;
-				} else if (IsDlgButtonChecked(hWnd, R_HOURLY) == BST_CHECKED) {
-					freq = HOURLY;
-				}
-				//freq = (IsDlgButtonChecked(hWnd, R_MONTHLY) == BST_CHECKED) ? MONTHLY :
-				//((IsDlgButtonChecked(hWnd, R_DAILY) == BST_CHECKED) ? DAILY : 
-				//	((IsDlgButtonChecked(hWnd, R_HOURLY) == BST_CHECKED) ? HOURLY : DAILY)
-				//	);
+				freq = RadioButtonToEnum(hWnd);
 
 				wchar_t buffer[1024];
 				swprintf(buffer, 1024, L"%s %d", basePathBuffer, freq);
 
-				MessageBox(plugin.hwndParent,buffer,L"meta",MB_OK);
+				MessageBox(plugin.hwndParent, buffer, L"meta", MB_OK);
 				EndDialog(hWnd, 1);
+
+				UpdateSettings( basePathBuffer, freq );
+
+				WriteConfig( basePathBuffer, freq );
 				return TRUE;
+
 			case IDCANCEL: 
 				EndDialog(hWnd, 0);
 				break;
+
 			case LOG_FOLDER_BROWSE:
 				CoInitialize(NULL);
 				BROWSEINFO bInfo;
 				ZeroMemory(&bInfo, sizeof(BROWSEINFO));
 				bInfo.hwndOwner = hWnd;
 				bInfo.pidlRoot = NULL;
-				bInfo.ulFlags = BIF_USENEWUI;
+				bInfo.ulFlags = BIF_USENEWUI | BIF_RETURNONLYFSDIRS;
 				bInfo.lpfn = NULL;
 				bInfo.lParam = NULL;
 				bInfo.lpszTitle = _T("Pick a Directory");
@@ -274,7 +249,7 @@ BOOL CALLBACK ConfigDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 					// get the name of the folder
 					TCHAR path[MAX_PATH];
 					if ( SHGetPathFromIDList ( pidl, path ) ) {
-						_tprintf ( _T("Selected Folder: %s\n"), path );
+						SetDlgItemText(hWnd, EDIT_LOG_FOLDER, path);
 					}
 
 					// free memory used
@@ -288,12 +263,17 @@ BOOL CALLBACK ConfigDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				break;
 			}}
 		break;
+
 	case WM_CLOSE:
 		EndDialog(hWnd, 0);
 		break;
+
+		/*default:
+		return DefWindowProc(hWnd, uMsg, wParam, lParam);*/
 	}
 	return FALSE;
 }
+
 
 
 // This is an export function called by winamp which returns this plugin info. 
@@ -308,13 +288,95 @@ void GetIniFilePath(HWND hwnd){
 	if(SendMessage(hwnd,WM_WA_IPC,0,IPC_GETVERSION) >= 0x2900) {
 		// this gets the string of the full ini file path
 		char *ini_pathA = (char*) SendMessage(hwnd, WM_WA_IPC, 0, IPC_GETINIFILE);
-		const size_t cSize = strlen(ini_pathA)+1;
-		mbstowcs(ini_path, ini_pathA, cSize);
+		size_t x;
+		size_t cSize = strlen(ini_pathA)+1;
+		//mbstowcs(ini_path, ini_pathA, cSize);
+		mbstowcs_s(&x, ini_path, ini_pathA, cSize);
 	} else {
 		// TODO throw error not supporting lower versions
 		//wchar_t* p = ini_path;
 		//p += GetModuleFileName(0,ini_path,sizeof(ini_path)) - 1;
 		//while(p && *p != '.'){p--;}
 		//lstrcpyn(p+1,L"ini",sizeof(ini_path));
+	}
+}
+
+void UpdateSettings(wchar_t* newBasePath, RotateFreq newFreq) {
+	bool settingsChanged = false;
+	if ( wcscmp (newBasePath, basePath) != 0 ){
+		settingsChanged = true;
+		wcscpy_s(basePath, MAX_PATH, newBasePath);
+	}
+	if ( newFreq != rotFreq ) {
+		settingsChanged = true;
+		rotFreq = newFreq;
+	}
+
+	if(settingsChanged){
+		logger.close();
+
+		logger.open(basePath, currentFilename, rotFreq);
+	}
+
+}
+
+void ReadConfig() {
+	GetIniFilePath(plugin.hwndParent);
+
+	GetPrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, DEFAULT_BASE_PATH, basePath, MAX_PATH, ini_path );
+
+	GetPrivateProfileString( INI_KEY, CURRFILENAME_KEY, L"NULL", currentFilename, Logger::MAX_FILENAME_LEN, ini_path );
+
+	wchar_t rotFreqStr[2];
+	wchar_t defBuffer[2];
+	swprintf(defBuffer, 2, L"%d", static_cast<int>(DEFAULT_ROTATE_FREQ));
+	GetPrivateProfileString( INI_KEY, ROTATE_FREQ_KEY, defBuffer, rotFreqStr, 2, ini_path );
+	rotFreq = static_cast<RotateFreq> (stoi(rotFreqStr));
+
+}
+
+void WriteConfig(wchar_t* basePath, RotateFreq freq) {
+	int r = WritePrivateProfileString( INI_KEY, LOGFILE_BASE_PATH_KEY, basePath, ini_path );
+
+	if (r == 0) {
+		int code = GetLastError();
+	}
+
+	wchar_t defBuffer[2];
+	swprintf(defBuffer, 2, L"%d", static_cast<int>(freq));
+	r = WritePrivateProfileString( INI_KEY, ROTATE_FREQ_KEY, defBuffer, ini_path );
+
+	if (r == 0) {
+		int code = GetLastError();
+	}
+}
+
+RotateFreq RadioButtonToEnum( HWND hWnd ) {
+	RotateFreq freq = DAILY;
+	if (IsDlgButtonChecked(hWnd, R_MONTHLY) == BST_CHECKED) { 
+		freq = MONTHLY;
+	} else if (IsDlgButtonChecked(hWnd, R_DAILY) == BST_CHECKED) {
+		freq = DAILY;
+	} else if (IsDlgButtonChecked(hWnd, R_HOURLY) == BST_CHECKED) {
+		freq = HOURLY;
+	}
+	//freq = (IsDlgButtonChecked(hWnd, R_MONTHLY) == BST_CHECKED) ? MONTHLY :
+	//((IsDlgButtonChecked(hWnd, R_DAILY) == BST_CHECKED) ? DAILY : 
+	//	((IsDlgButtonChecked(hWnd, R_HOURLY) == BST_CHECKED) ? HOURLY : DAILY)
+	//	);
+
+	return freq;
+}
+
+int EnumToRadioButton( RotateFreq freq ) {
+	switch (freq) {
+	case MONTHLY: 
+		return R_MONTHLY;
+	case DAILY:
+		return R_DAILY;
+	case HOURLY:
+		return R_HOURLY;
+	default:
+		return R_DAILY;
 	}
 }

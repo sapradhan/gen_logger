@@ -10,8 +10,6 @@ using namespace std;
 
 const std::locale utf8_locale = std::locale(std::locale(),
                                     new std::codecvt_utf8<wchar_t>());
-//char* LOG_DIR = "C:\\logs\\";
-//const wstring Logger::LOG_FILENAME = L"log.txt";
 const wstring Logger::ARCHIVE_FOLDER = L"archive\\";
 
 Logger::Logger() {
