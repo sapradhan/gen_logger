@@ -9,7 +9,7 @@
 using namespace std;
 
 const std::locale utf8_locale = std::locale(std::locale(),
-                                    new std::codecvt_utf8<wchar_t>());
+	new std::codecvt_utf8<wchar_t>());
 const wstring Logger::ARCHIVE_FOLDER = L"archive\\";
 
 Logger::Logger() {
@@ -24,6 +24,8 @@ void Logger::open(wstring basePath, wstring currentFilename, RotateFreq freq) {
 	logfileBasePath = basePath;
 	currLogFilename = currentFilename;
 	rotateFreqency = freq;
+
+	CreateArchiveDir();
 
 	if (!RotateIfNecessary()) {
 		stream.open((basePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
@@ -57,13 +59,7 @@ bool Logger::RotateIfNecessary() {
 		if (stream.is_open())
 			stream.close();
 
-		int r = MoveFile((logfileBasePath + currLogFilename).c_str(), (logfileBasePath + ARCHIVE_FOLDER + currLogFilename).c_str()); 
-
-		//TODO exception handling
-		if (r == 0) {
-			int code = GetLastError();
-			r++;
-		}
+		MoveToArchive();
 
 		currLogFilename = newLogFilename;
 		stream.open((logfileBasePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
@@ -92,3 +88,37 @@ wchar_t* Logger::CalcLogFilename(wchar_t* buffer) {
 	}
 	return buffer;
 }
+
+void Logger::MoveToArchive() {
+	int r = MoveFile((logfileBasePath + currLogFilename).c_str(), (logfileBasePath + ARCHIVE_FOLDER + currLogFilename).c_str()); 
+
+	if (r == 0) {
+		int code = GetLastError();
+		wchar_t buffer[MAX_PATH + 64];
+		wsprintf(buffer, L"Could not create archive file %s. Error code: %u", (logfileBasePath + ARCHIVE_FOLDER + currLogFilename).c_str(), code);
+		MessageBox(NULL, buffer, L"ERROR", MB_OK);
+	}
+}
+
+void Logger::ForceCloseAndRotate() {
+	if (stream.is_open())
+		stream.close();
+
+	MoveToArchive();
+
+}
+
+void Logger::CreateArchiveDir() { 
+	int r = CreateDirectory((logfileBasePath + ARCHIVE_FOLDER).c_str(), NULL);
+
+	if (r == 0) {
+		int code = GetLastError();
+		if (code != ERROR_ALREADY_EXISTS ) {
+
+			wchar_t buffer[MAX_PATH + 64];
+			wsprintf(buffer, L"Could not create archive folder %s. Error code: %u", (logfileBasePath + ARCHIVE_FOLDER).c_str(), code);
+			MessageBox(NULL, buffer, L"ERROR", MB_OK);
+		}
+	}
+}
+

@@ -1,6 +1,9 @@
 #include <fstream>
 #include <Windows.h>
 #include <string>
+
+#ifndef LOGGER_H
+#define LOGGER_H
 using namespace std;
 
 enum RotateFreq { MONTHLY, DAILY, HOURLY, EVERY_MINUTE };
@@ -19,6 +22,8 @@ private:
 
 	bool IsTimeToRotate(wstring& calcFilename);
 	bool RotateIfNecessary();
+	void MoveToArchive();
+	void CreateArchiveDir();
 	wchar_t* CalcLogFilename(wchar_t* buffer);
 
 
@@ -28,9 +33,12 @@ public:
 	void open(wstring basePath, wstring currFilename, RotateFreq r = DAILY);
 	void log(wstring);
 	wstring close(void);
+	void ForceCloseAndRotate();
 	~Logger();
 
 private: 
 	RotateFreq rotateFreqency;
 
 };
+
+#endif
