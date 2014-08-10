@@ -293,9 +293,7 @@ void UpdateSettings(wchar_t* newBasePath, RotateFreq newFreq) {
 	}
 
 	if(settingsChanged){
-		logger.close();
-
-		logger.open(basePath, currentFilename, rotFreq);
+		logger.ForceCloseAndRotate(newBasePath, newFreq);
 	}
 
 }

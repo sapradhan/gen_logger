@@ -1,9 +1,7 @@
 #include "StdAfx.h"
 #include "logger.h"
-#include <string>
 #include <fstream>
 #include "wa_ipc.h"
-#include <Windows.h>
 #include <locale>
 #include <codecvt>
 using namespace std;
@@ -100,11 +98,31 @@ void Logger::MoveToArchive() {
 	}
 }
 
-void Logger::ForceCloseAndRotate() {
-	if (stream.is_open())
-		stream.close();
+void Logger::ForceCloseAndRotate(wchar_t* newBasePath, RotateFreq newFreq) {
+	bool settingsChanged = false;
+	if ( wcscmp (newBasePath, logfileBasePath.c_str()) != 0 ){
+		settingsChanged = true;
+	}
+	if ( newFreq != rotateFreqency ) {
+		settingsChanged = true;
+	}
 
-	MoveToArchive();
+	if (settingsChanged) {
+		if (stream.is_open())
+			stream.close();
+
+		MoveToArchive();
+		wchar_t buffer[24];
+
+		logfileBasePath = newBasePath;
+		rotateFreqency = newFreq;
+
+		currLogFilename = CalcLogFilename(buffer);
+
+		stream.open((logfileBasePath + currLogFilename).c_str(), std::ofstream::out | std::ofstream::app);
+		stream.imbue(utf8_locale);
+
+	}
 
 }
 
@@ -113,7 +131,7 @@ void Logger::CreateArchiveDir() {
 
 	if (r == 0) {
 		int code = GetLastError();
-		if (code != ERROR_ALREADY_EXISTS ) {
+		if (code != ERROR_ALREADY_EXISTS) {
 
 			wchar_t buffer[MAX_PATH + 64];
 			wsprintf(buffer, L"Could not create archive folder %s. Error code: %u", (logfileBasePath + ARCHIVE_FOLDER).c_str(), code);

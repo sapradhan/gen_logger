@@ -1,9 +1,8 @@
-#include <fstream>
-#include <Windows.h>
-#include <string>
+#pragma once
 
-#ifndef LOGGER_H
-#define LOGGER_H
+#include "Stdafx.h"
+#include <fstream>
+
 using namespace std;
 
 enum RotateFreq { MONTHLY, DAILY, HOURLY, EVERY_MINUTE };
@@ -33,12 +32,10 @@ public:
 	void open(wstring basePath, wstring currFilename, RotateFreq r = DAILY);
 	void log(wstring);
 	wstring close(void);
-	void ForceCloseAndRotate();
+	void ForceCloseAndRotate(wchar_t* newBasePath, RotateFreq newFreq);
 	~Logger();
 
 private: 
 	RotateFreq rotateFreqency;
 
 };
-
-#endif
