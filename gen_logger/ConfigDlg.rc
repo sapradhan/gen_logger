@@ -38,5 +38,5 @@ FONT 8, "Ms Shell Dlg"
     LTEXT           "Log Folder", LOG_FOLDER_LABEL, 11, 18, 34, 8, SS_LEFT, WS_EX_LEFT
     GROUPBOX        "Log Rotate Frequency", LOG_ROTATE_GROUP, 10, 40, 170, 29, WS_GROUP, WS_EX_LEFT
     GROUPBOX        "Attributes to log", ATTRIBUTES_GROUP, 10, 75, 170, 75, WS_DISABLED, WS_EX_LEFT
-    LTEXT           "Song Logger v 1.0 \nBuild 20140803", VERSION_LABEL, 10, 155, 62, 16, SS_LEFT, WS_EX_LEFT
+    LTEXT           "Song Logger v 1.1 \nBuild 20140909", VERSION_LABEL, 10, 155, 62, 16, SS_LEFT, WS_EX_LEFT
 }

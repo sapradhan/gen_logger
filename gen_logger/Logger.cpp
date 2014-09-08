@@ -4,6 +4,8 @@
 #include "wa_ipc.h"
 #include <locale>
 #include <codecvt>
+#include <WinCrypt.h>
+
 using namespace std;
 
 const std::locale utf8_locale = std::locale(std::locale(),
@@ -33,7 +35,37 @@ void Logger::open(wstring basePath, wstring currentFilename, RotateFreq freq) {
 
 void Logger::log(std::wstring entry) {
 	RotateIfNecessary();
-	stream << entry << std::endl;
+	const wchar_t* input_wide = entry.c_str();
+	char* input = new char[entry.length()*3];
+
+	int converted = WideCharToMultiByte(CP_UTF8, 0, input_wide, -1, input, entry.length()*3, NULL, NULL); 
+
+	if (converted == 0) {
+		int err = GetLastError();
+		wchar_t buffer[64];
+		wsprintf(buffer, L"%u", err);
+		MessageBox(NULL, buffer, L"ERROR", MB_OK);
+	}
+
+	DWORD reqLength = 0; 
+	CryptBinaryToStringA((BYTE*)input, (converted-1)*sizeof(char) , CRYPT_STRING_BASE64, NULL, &reqLength);
+	char *buffer = new char[reqLength + 1];
+	CryptBinaryToStringA((BYTE*)input, (converted-1)*sizeof(char) , CRYPT_STRING_BASE64, buffer, &reqLength);
+
+	int i,j;
+	for (i=0,j=0; ; i++,j++){
+		while (buffer[j] == 0x0a || buffer[j] == 0x0d){
+			j++;
+		} 
+		buffer[i] = buffer[j];
+		if (buffer[j] == 0)
+			break;
+	}
+
+	stream << buffer << std::endl;
+
+	delete [] input;
+	delete [] buffer;
 }
 
 wstring Logger::close() {
@@ -72,16 +104,16 @@ wchar_t* Logger::CalcLogFilename(wchar_t* buffer) {
 	GetLocalTime(&localtime);
 	switch (rotateFreqency) {
 	case EVERY_MINUTE:
-		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d%02d%02d.txt", localtime.wYear, localtime.wMonth, localtime.wDay, localtime.wHour, localtime.wMinute);
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d%02d%02d.lnk", localtime.wYear, localtime.wMonth, localtime.wDay, localtime.wHour, localtime.wMinute);
 		break;
 	case HOURLY:
-		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d%02d.txt", localtime.wYear, localtime.wMonth, localtime.wDay, localtime.wHour);
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d%02d.lnk", localtime.wYear, localtime.wMonth, localtime.wDay, localtime.wHour);
 		break;
 	case DAILY:
-		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d.txt", localtime.wYear, localtime.wMonth, localtime.wDay);
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d%02d.lnk", localtime.wYear, localtime.wMonth, localtime.wDay);
 		break;
 	case MONTHLY:
-		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d.txt", localtime.wYear, localtime.wMonth);
+		swprintf(buffer, MAX_FILENAME_LEN, L"%04d%02d.lnk", localtime.wYear, localtime.wMonth);
 		break;
 	}
 	return buffer;

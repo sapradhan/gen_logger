@@ -15,8 +15,8 @@
 ; !include "Sections.nsh"
  
 ; common defines for a generic DrO installer :o)
-!define VERSION "1.0"
-!define ALT_VER "1_0"
+!define VERSION "1.1"
+!define ALT_VER "1_1"
 !define PLUG "Song Logger"
 !define PLUG_ALT "song_logger"
 !define PLUG_FILE "gen_logger"
